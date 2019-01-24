@@ -78,8 +78,10 @@ int main(int argc, char *argv[]) {
 				exit(0);
 			}
 
+			// Encrypt provided password with user's salt
 			c_pass = crypt(user_pass, passwddata->passwd_salt);
 
+			// Check if encrypted password matches password in passdb
 			if (!strcmp(c_pass, passwddata->passwd)) {
 				printf("You're in! Previously failed attempts: %d\n", passwddata->pwfailed);
 
@@ -90,14 +92,18 @@ int main(int argc, char *argv[]) {
 					exit(0);
 				}
 
+				// Check that password not too old						
 				if (passwddata->pwage > MAX_PW_AGE) {
 					printf("You have used your password %d times. Time to change it!\n", passwddata->pwage);
 				}
 
+				// Change euid to given user
 				if (setuid(passwddata->uid)) {
 					printf("Failed to set uid for shell. Exiting...\n");
 					exit(0);
 				}
+
+				// Start shell
 				if (execve(shell_argv[0], &shell_argv[0], shell_envp)) {
 					printf("Failed to open shell for user. Exiting...\n");
 					exit(0);
