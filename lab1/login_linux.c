@@ -11,12 +11,13 @@
 #include <pwd.h>
 #include <sys/types.h>
 #include <crypt.h>
-/* Uncomment next line in step 2 */
-/* #include "pwent.h" */
+#include "pwent.h"
 
 #define TRUE 1
 #define FALSE 0
 #define LENGTH 16
+#define MAX_PW_AGE 10
+#define MAX_FAILED_ATTEMPTS 5
 
 void sighandler() {
 
@@ -26,13 +27,13 @@ void sighandler() {
 
 int main(int argc, char *argv[]) {
 
-	struct passwd *passwddata; /* this has to be redefined in step 2 */
+	mypwent *passwddata; /* this has to be redefined in step 2 */
 	/* see pwent.h */
 
 	char important[LENGTH] = "***IMPORTANT***";
 
 	char user[LENGTH];
-	//char   *c_pass; //you might want to use this variable later...
+	char *c_pass; //you might want to use this variable later...
 	char prompt[] = "password: ";
 	char *user_pass;
 
@@ -44,34 +45,50 @@ int main(int argc, char *argv[]) {
 				important);
 
 		printf("login: ");
-		fflush(NULL); /* Flush all  output buffers */
+		fflush(NULL); /* Flush all output buffers */
 		__fpurge(stdin); /* Purge any data in stdin buffer */
 
-		if (gets(user) == NULL) /* gets() is vulnerable to buffer */
-			exit(0); /*  overflow attacks.  */
+		if (fgets(user, LENGTH, stdin) == NULL)
+			exit(0);
+
+		// Remove trailing newline
+		user[strcspn(user, "\n")] = 0;
 
 		/* check to see if important variable is intact after input of login name - do not remove */
 		printf("Value of variable 'important' after input of login name: %*.*s\n",
 				LENGTH - 1, LENGTH - 1, important);
 
 		user_pass = getpass(prompt);
-		passwddata = getpwnam(user);
+		passwddata = mygetpwnam(user);
 
 		if (passwddata != NULL) {
-			/* You have to encrypt user_pass for this to work */
-			/* Don't forget to include the salt */
+			if (passwddata->pwfailed > MAX_FAILED_ATTEMPTS) {
+				printf("You're account has been locked due to too many failed login attempts. Please contact a system administrator to unlock your account.\n");
+				exit(0);
+			}
 
-			if (!strcmp(user_pass, passwddata->pw_passwd)) {
+			c_pass = crypt(user_pass, passwddata->passwd_salt);
 
-				printf(" You're in !\n");
+			if (!strcmp(c_pass, passwddata->passwd)) {
+				printf("You're in! Previously failed attempts: %d\n", passwddata->pwfailed);
+				passwddata->pwfailed = 0;
+				passwddata->pwage++;
+
+				if (passwddata->pwage > MAX_PW_AGE) {
+					printf("You have used your password %d times. Time to change it!\n", passwddata->pwage);
+				}
 
 				/*  check UID, see setuid(2) */
 				/*  start a shell, use execve(2) */
-
+			} else {
+				printf("Login Incorrect\n");
+				passwddata->pwfailed++;
 			}
+
+			mysetpwent(passwddata->pwname, passwddata);
+		} else {
+			printf("Login Incorrect\n");
 		}
-		printf("Login Incorrect \n");
 	}
 	return 0;
 }
-
