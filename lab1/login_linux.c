@@ -19,23 +19,35 @@
 #define MAX_PW_AGE 10
 #define MAX_FAILED_ATTEMPTS 5
 
-void sighandler() {
+typedef void (*sighandler_t)(int);
 
-	/* add signalhandling routines here */
-	/* see 'man 2 signal' */
+void safe_sighandler(int signum, sighandler_t handler) {
+	if (signal(signum, handler) == SIG_ERR) {
+		printf("Unable to override signal handler for %d\n", signum);
+		exit(0);
+	}
+}
+
+void sighandler() {
+	safe_sighandler(SIGINT, SIG_IGN);
+	safe_sighandler(SIGQUIT, SIG_IGN);
+	safe_sighandler(SIGABRT, SIG_IGN);
+	safe_sighandler(SIGTERM, SIG_IGN);
+	safe_sighandler(SIGTSTP, SIG_IGN);
 }
 
 int main(int argc, char *argv[]) {
-
-	mypwent *passwddata; /* this has to be redefined in step 2 */
-	/* see pwent.h */
+	mypwent *passwddata;
 
 	char important[LENGTH] = "***IMPORTANT***";
 
 	char user[LENGTH];
-	char *c_pass; //you might want to use this variable later...
+	char *c_pass;
 	char prompt[] = "password: ";
 	char *user_pass;
+
+	char *shell_argv[] = {"/bin/sh", 0};
+	char *shell_envp[] = {0};
 
 	sighandler();
 
@@ -51,8 +63,7 @@ int main(int argc, char *argv[]) {
 		if (fgets(user, LENGTH, stdin) == NULL)
 			exit(0);
 
-		// Remove trailing newline
-		user[strcspn(user, "\n")] = 0;
+		user[strcspn(user, "\n")] = 0; /* Remove trailing newline */
 
 		/* check to see if important variable is intact after input of login name - do not remove */
 		printf("Value of variable 'important' after input of login name: %*.*s\n",
@@ -71,23 +82,36 @@ int main(int argc, char *argv[]) {
 
 			if (!strcmp(c_pass, passwddata->passwd)) {
 				printf("You're in! Previously failed attempts: %d\n", passwddata->pwfailed);
+
 				passwddata->pwfailed = 0;
 				passwddata->pwage++;
+				if (mysetpwent(passwddata->pwname, passwddata)) {
+					printf("Failed to write user info to passdb. Exiting...\n");
+					exit(0);
+				}
 
 				if (passwddata->pwage > MAX_PW_AGE) {
 					printf("You have used your password %d times. Time to change it!\n", passwddata->pwage);
 				}
 
-				/*  check UID, see setuid(2) */
-				/*  start a shell, use execve(2) */
+				if (setuid(passwddata->uid)) {
+					printf("Failed to set uid for shell. Exiting...\n");
+					exit(0);
+				}
+				if (execve(shell_argv[0], &shell_argv[0], shell_envp)) {
+					printf("Failed to open shell for user. Exiting...\n");
+					exit(0);
+				}
 			} else {
-				printf("Login Incorrect\n");
+				printf("Login incorrect\n");
 				passwddata->pwfailed++;
+				if (mysetpwent(passwddata->pwname, passwddata)) {
+					printf("Failed to write user info to passdb. Exiting...\n");
+					exit(0);
+				}
 			}
-
-			mysetpwent(passwddata->pwname, passwddata);
 		} else {
-			printf("Login Incorrect\n");
+			printf("Login incorrect\n");
 		}
 	}
 	return 0;
