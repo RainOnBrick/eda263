@@ -80,6 +80,10 @@ int main(int argc, char *argv[]) {
 
 			// Encrypt provided password with user's salt
 			c_pass = crypt(user_pass, passwddata->passwd_salt);
+			if (c_pass == NULL) {
+				printf("Failed to enrypt password. Exiting...");
+				exit(0);
+			}
 
 			// Check if encrypted password matches password in passdb
 			if (!strcmp(c_pass, passwddata->passwd)) {
@@ -99,7 +103,7 @@ int main(int argc, char *argv[]) {
 
 				// Change euid to given user
 				if (setuid(passwddata->uid)) {
-					printf("Failed to set uid for shell. Exiting...\n");
+					printf("Failed to set euid for shell. Exiting...\n");
 					exit(0);
 				}
 
